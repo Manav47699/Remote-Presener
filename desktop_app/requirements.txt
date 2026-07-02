@@ -1,0 +1,5 @@
+PyQt5               #creates desktop GUI
+pyautogui           # controls the mouse and keyboard programitically and can take screenshots
+websockets       #enable realtime communication between 2 devices using web scoket protocol
+qrcode           # generate QR codes from text or urls
+Pillow            # Image processing library
