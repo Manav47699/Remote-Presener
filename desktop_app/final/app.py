@@ -28,7 +28,7 @@ import pyautogui
 import qrcode
 from PIL import Image
 from PyQt5.QtCore import Qt, QObject, pyqtSignal
-from PyQt5.QtGui import QPixmap, QImage, QFont
+from PyQt5.QtGui import QPixmap, QImage, QFont, QIcon
 from PyQt5.QtWidgets import (
     QApplication,
     QWidget,
@@ -437,6 +437,7 @@ class MainWindow(QWidget):
 
     def _init_ui(self) -> None:
         self.setWindowTitle("Remote PC Controller")
+        self.setWindowIcon(QIcon("logo.png"))
         self.setFixedSize(WINDOW_WIDTH, WINDOW_HEIGHT)
         self.setStyleSheet(DARK_STYLESHEET)
 
@@ -519,6 +520,7 @@ class MainWindow(QWidget):
 
 def main() -> None:
     app = QApplication(sys.argv)
+    app.setWindowIcon(QIcon("logo.png"))
     window = MainWindow()
     window.show()
     sys.exit(app.exec_())
