@@ -15,8 +15,6 @@ import threading
 from io import BytesIO
 
 # --- CRITICAL X11 FIX FOR NATIVE EXECUTABLES/VENVS ---
-# This must run before importing pyautogui or initializing QApplication
-# to prevent the 'DisplayConnectionError' from blocking execution on Linux.
 if sys.platform.startswith('linux'):
     os.system("xhost +local: > /dev/null 2>&1")
 
@@ -36,7 +34,6 @@ WEBSOCKET_PORT = 8080
 pyautogui.PAUSE = 0
 pyautogui.FAILSAFE = False
 
-# Scaled up Window Parameters
 WINDOW_WIDTH = 500
 WINDOW_HEIGHT = 580
 
@@ -63,7 +60,6 @@ def get_local_ip() -> str:
     return ip
 
 def generate_qr_pixmap(data: str) -> QPixmap:
-    # Increased box_size to 12 for crisp, high-resolution rendering on large window layout
     qr = qrcode.QRCode(version=1, box_size=12, border=2)
     qr.add_data(data)
     qr.make(fit=True)
@@ -80,19 +76,28 @@ class ConnectionBridge(QObject):
     client_disconnected = pyqtSignal()
 
 # --------------------------------------------------------------------------
-# Server & Request Processing
+# Server & Request Processing (FIXED THREAD LOOP)
 # --------------------------------------------------------------------------
 class PresentationServer:
     def __init__(self, bridge: ConnectionBridge):
         self.bridge = bridge
         self._current_client = None
+        self.loop = None
 
     def start(self) -> None:
-        threading.Thread(target=lambda: asyncio.run(self._serve()), daemon=True).start()
+        # Spin up thread and wait until loop is fully registered
+        threading.Thread(target=self._run_loop, daemon=True).start()
+
+    def _run_loop(self):
+        self.loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self.loop)
+        self.loop.run_until_complete(self._serve())
+        self.loop.run_forever()
 
     async def _serve(self) -> None:
-        async with websockets.serve(self._handle_client, WEBSOCKET_HOST, WEBSOCKET_PORT):
-            await asyncio.Future()
+        print(f"[Backend] Starting server on {WEBSOCKET_HOST}:{WEBSOCKET_PORT}")
+        # Explicitly binding websockets.serve to keep it alive
+        self.server = await websockets.serve(self._handle_client, WEBSOCKET_HOST, WEBSOCKET_PORT)
 
     async def _handle_client(self, websocket) -> None:
         if self._current_client and self._current_client.open:
@@ -101,6 +106,7 @@ class PresentationServer:
         self._current_client = websocket
         addr = websocket.remote_address[0] if websocket.remote_address else "unknown"
         self.bridge.client_connected.emit(addr)
+        print(f"[Backend] Client connected from: {addr}")
 
         try:
             async for raw_message in websocket:
@@ -108,7 +114,7 @@ class PresentationServer:
                 if payload.get("type") == "press" and payload.get("key") in ["up", "down"]:
                     pyautogui.press(payload["key"])
         except websockets.ConnectionClosed:
-            pass
+            print("[Backend] Client connection severed closed")
         finally:
             if self._current_client is websocket:
                 self._current_client = None
@@ -124,13 +130,13 @@ class MainWindow(QWidget):
         self.bridge.client_connected.connect(lambda addr: self._update_status(f"● Connected ({addr})", "background-color: #1e3a24; color: #6bff8f;"))
         self.bridge.client_disconnected.connect(lambda: self._update_status("● Disconnected", "background-color: #3a1e1e; color: #ff6b6b;"))
 
+        # Grab the fresh current IP address (important if on Hotspot now!)
         local_ip = get_local_ip()
         ws_url = f"ws://{local_ip}:{WEBSOCKET_PORT}"
+        print(f"[Backend] Auto-detected local IP: {local_ip}")
 
-        # Custom App Branding Configuration
         self.setWindowTitle("Presenter Remote")
         
-        # Resolves runtime temp path injection when bundled inside binary extraction environments via PyInstaller
         base_path = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
         logo_path = os.path.join(base_path, "logo.png")
         if os.path.exists(logo_path):
@@ -148,7 +154,6 @@ class MainWindow(QWidget):
         title.setAlignment(Qt.AlignCenter)
         layout.addWidget(title)
 
-        # QR Frame Setup
         qr_frame = QFrame()
         qr_frame.setObjectName("qrFrame")
         qr_layout = QVBoxLayout()
@@ -189,7 +194,6 @@ class MainWindow(QWidget):
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     
-    # Bundle matching application runtime icon asset for system docks
     base_path = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
     logo_path = os.path.join(base_path, "logo.png")
     if os.path.exists(logo_path):
