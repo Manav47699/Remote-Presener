@@ -16,7 +16,8 @@
         "foregroundImage": "./assets/icon.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.manav47699.remotepresentor"
+      "package": "com.manav47699.remotepresentor",
+      "usesCleartextTraffic": true
     },
     "web": {
       "output": "static",
@@ -31,7 +32,8 @@
           "image": "./assets/splash.png",
           "imageWidth": 150
         }
-      ]
+      ],
+      "expo-build-properties"
     ],
     "experiments": {
       "typedRoutes": true,

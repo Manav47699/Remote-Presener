@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, TextInput, Alert, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function App() {
   const [url, setUrl] = useState('ws://192.168.16.106:8080');
   const [status, setStatus] = useState<'DISCONNECTED' | 'CONNECTING' | 'CONNECTED'>('DISCONNECTED');
-  const [ws, setWs] = useState<WebSocket | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
 
   const connect = () => {
     if (!url.startsWith('ws://') && !url.startsWith('wss://')) {
@@ -14,46 +14,54 @@ export default function App() {
     }
 
     setStatus('CONNECTING');
+    
+    // Safely close any hanging connection before creating a new one
+    if (wsRef.current) {
+      wsRef.current.close();
+    }
+
     const socket = new WebSocket(url.trim());
 
     socket.onopen = () => {
       setStatus('CONNECTED');
-      setWs(socket);
+      wsRef.current = socket;
     };
 
     socket.onclose = () => {
       setStatus('DISCONNECTED');
-      setWs(null);
+      wsRef.current = null;
     };
 
     socket.onerror = (e) => {
       console.log('WebSocket Error: ', e);
       setStatus('DISCONNECTED');
-      setWs(null);
+      wsRef.current = null;
       Alert.alert('Connection Failed', 'Could not sync over local sockets.');
     };
   };
 
   const disconnect = () => {
-    if (ws) {
-      ws.close();
+    if (wsRef.current) {
+      wsRef.current.close();
     }
   };
 
   const sendKey = (key: 'up' | 'down') => {
-    if (ws && status === 'CONNECTED') {
-      ws.send(JSON.stringify({ type: 'press', key: key }));
+    if (wsRef.current && status === 'CONNECTED') {
+      wsRef.current.send(JSON.stringify({ type: 'press', key: key }));
     } else {
       Alert.alert('Not Connected', 'Please connect to your PC first.');
     }
   };
 
-  // Clean up socket on unmount
+  // Clean up socket definitively on component unmount
   useEffect(() => {
     return () => {
-      if (ws) ws.close();
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
     };
-  }, [ws]);
+  }, []);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -117,7 +125,7 @@ const styles = StyleSheet.create({
   badgeConnecting: { backgroundColor: '#fe8019' },
   badgeConnected: { backgroundColor: '#1e3a24' },
   badgeText: { color: '#ffffff', fontSize: 12, fontWeight: 'bold' },
-  card: { backgroundColor: '#1e1e2e', padding: 24, borderRadius: 16, borderHeight: 1, borderColor: '#313244', marginTop: '20%' },
+  card: { backgroundColor: '#1e1e2e', padding: 24, borderRadius: 16, borderWidth: 1, borderColor: '#313244', marginTop: '20%' }, // Fixed borderHeight -> borderWidth
   title: { color: '#ffffff', fontSize: 22, fontWeight: 'bold', marginBottom: 8, textAlign: 'center' },
   subtitle: { color: '#a0a0b0', fontSize: 14, marginBottom: 24, textAlign: 'center' },
   input: { backgroundColor: '#252538', color: '#ffffff', borderRadius: 10, paddingHorizontal: 16, paddingVertical: 14, fontSize: 16, marginBottom: 20, borderWidth: 1, borderColor: '#313244' },
